@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:id="@+id/ctxEdit" android:title="Edit" />
+    <item android:id="@+id/ctxDelete" android:title="Delete" />
+    <item android:id="@+id/ctxCall" android:title="Call" />
+    <item android:id="@+id/ctxSms" android:title="SMS" />
+    <item android:id="@+id/ctxShare" android:title="Share" />
+    <item android:id="@+id/ctxCamera" android:title="Camera" />
+</menu>

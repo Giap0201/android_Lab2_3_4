@@ -72,7 +72,8 @@ public class AddContact extends AppCompatActivity {
 //    );
 
     private void chooseImage() {
-        Intent i = new Intent(Intent.ACTION_PICK);
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("image/*");
         startActivityForResult(i, 200);
     }
@@ -80,10 +81,13 @@ public class AddContact extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 200 && resultCode == RESULT_OK) {
+        if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
-            imageView.setImageURI(uri);
-            uriAnh = uri.toString();
+            if (uri != null) {
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                imageView.setImageURI(uri);
+                uriAnh = uri.toString();
+            }
         }
     }
 
