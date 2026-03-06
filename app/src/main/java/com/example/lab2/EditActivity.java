@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -21,6 +22,7 @@ public class EditActivity extends AppCompatActivity {
     Button btnLuu, btnHuy;
     ImageView imgAvatar;
     String uriAnhHienTai = "";
+    CheckBox cbStatusEdit;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +51,8 @@ public class EditActivity extends AppCompatActivity {
             etId.setText(String.valueOf(id));
             etHoTen.setText(ten);
             etPhone.setText(sdt);
+            boolean trangThaiHienTai = bundle.getBoolean("status");
+            cbStatusEdit.setChecked(trangThaiHienTai);
 
             if (uriAnhHienTai != null && !uriAnhHienTai.isEmpty()) {
                 try {
@@ -97,6 +101,8 @@ public class EditActivity extends AppCompatActivity {
         bundle.putInt("id", Integer.parseInt(etId.getText().toString()));
         bundle.putString("hoVaTen", tenMoi);
         bundle.putString("soDienThoai", sdtMoi);
+        bundle.putBoolean("status", cbStatusEdit.isChecked());
+
         bundle.putString("uriAnh", uriAnhHienTai);
 
         intent.putExtras(bundle);
@@ -131,5 +137,6 @@ public class EditActivity extends AppCompatActivity {
         btnLuu = findViewById(R.id.btnLuuEdit);
         btnHuy = findViewById(R.id.btnHuyEdit);
         imgAvatar = findViewById(R.id.imgAvatarEdit);
+        cbStatusEdit = findViewById(R.id.cbStatusEdit);
     }
 }

@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
             bundle.putString("hoVaTen", c.getName());
             bundle.putString("soDienThoai", c.getPhone());
             bundle.putString("uriAnh", c.getImagePath());
+            bundle.putBoolean("status", c.isStatus());
             intent.putExtras(bundle);
             startActivityForResult(intent, 200);
             return true;
@@ -188,11 +189,14 @@ public class MainActivity extends AppCompatActivity {
                 String hoTen = bundle.getString("hoVaTen");
                 String soDienThoai = bundle.getString("soDienThoai");
                 String uriAnh = bundle.getString("uriAnh");
+                boolean statusMoi = bundle.getBoolean("status");
                 Contact c = dsContact.get(selectedItem);
                 c.setId(id);
                 c.setName(hoTen);
                 c.setPhone(soDienThoai);
                 c.setImagePath(uriAnh);
+                c.setStatus(statusMoi);
+
                 adapter.notifyDataSetChanged();
                 Toast.makeText(this, "Cập nhật thành công!", Toast.LENGTH_SHORT).show();
             }
