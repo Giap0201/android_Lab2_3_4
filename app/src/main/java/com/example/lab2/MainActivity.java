@@ -117,6 +117,20 @@ public class MainActivity extends AppCompatActivity {
             // Mình dùng mã 300 để phân biệt với 100 (Thêm) và 200 (Sửa) nhé
             startActivityForResult(intent, 300);
             return true;
+        } else if (id == R.id.ctxDelete){
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Xác nhận");
+            builder.setMessage("Bạn có chắc chắn xoá các mục đã chọn?");
+            builder.setPositiveButton("Xoá", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dsContact.remove(c);
+                    adapter.notifyDataSetChanged();
+                    Toast.makeText(MainActivity.this, "Đã xoá 1 liên hệ", Toast.LENGTH_SHORT).show();
+                }
+            });
+            builder.setNegativeButton("Huỷ", null);
+            builder.show();
         }
         return super.onContextItemSelected(item);
     }
