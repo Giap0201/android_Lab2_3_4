@@ -1,9 +1,14 @@
 package com.example.lab2;
 
+import android.Manifest;
+import android.content.ContentProviderOperation;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.view.ContextMenu;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -35,6 +40,12 @@ public class MainActivity extends AppCompatActivity {
     Button btnThemMoi, btnXoa;
     int selectedItem;
 
+    // private MyDB db; // COMMENT LẠI DB
+    private ContentProvider cp;
+
+    // Khai báo mã request xin quyền
+    private static final int PERMISSIONS_REQUEST_READ_CONTACTS = 100;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -45,8 +56,115 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
         addControls();
         addEvents();
+    }
+
+    private void addControls() {
+        listView = findViewById(R.id.lvContact);
+        btnXoa = findViewById(R.id.btnXoa);
+        btnThemMoi = findViewById(R.id.btnThemMoi);
+        cbCheck = findViewById(R.id.cbCheck);
+
+        // --- COMMENT LẠI TOÀN BỘ PHẦN SQLITE ---
+        /*
+        db = new MyDB(this, "Contact.db", null, 1);
+        dsContact = db.getAllContacts();
+        if (dsContact.size() == 0) {
+            db.addContact(new Contact(1, "Nguyen Van A", "0987654321", false, null));
+            ...
+            dsContact = db.getAllContacts();
+        }
+        adapter = new ContactAdapter(this, dsContact);
+        listView.setAdapter(adapter);
+        */
+
+        // DÙNG CONTENT PROVIDER ĐỂ HIỂN THỊ DANH BẠ
+        dsContact = new ArrayList<>();
+        adapter = new ContactAdapter(this, dsContact);
+        listView.setAdapter(adapter);
+
+        ShowContact(); // Gọi hàm xin quyền và load danh bạ
+
+        registerForContextMenu(listView);
+    }
+
+    private void ShowContact() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Kiểm tra xem đã có đủ cả 2 quyền chưa
+            boolean hasRead = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+            boolean hasWrite = checkSelfPermission(Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+
+            if (!hasRead || !hasWrite) {
+                // Xin cả 2 quyền cùng lúc
+                requestPermissions(new String[]{
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.WRITE_CONTACTS
+                }, PERMISSIONS_REQUEST_READ_CONTACTS);
+            } else {
+                loadContactsFromDevice();
+            }
+        } else {
+            loadContactsFromDevice();
+        }
+    }
+
+    // Xử lý kết quả sau khi người dùng bấm Cho Phép / Từ chối quyền
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSIONS_REQUEST_READ_CONTACTS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Đã cấp quyền -> Load dữ liệu
+                loadContactsFromDevice();
+            } else {
+                Toast.makeText(this, "Cần cấp quyền để đọc danh bạ!", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    // Hàm tách riêng để load dữ liệu
+    private void loadContactsFromDevice() {
+        cp = new ContentProvider(this);
+        dsContact.clear();
+        dsContact.addAll(cp.getAllContact());
+        adapter.notifyDataSetChanged();
+    }
+
+
+    private void addContactToSystem(String name, String phone) {
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+        // 1. Tạo một RawContact mới (Trống)
+        int rawContactInsertIndex = ops.size();
+        ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                .build());
+
+        // 2. Nhét Tên vào RawContact vừa tạo
+        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactInsertIndex)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+                .build());
+
+        // 3. Nhét Số điện thoại vào
+        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, rawContactInsertIndex)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                .build());
+
+        // 4. Thực thi lệnh lưu
+        try {
+            getContentResolver().applyBatch(ContactsContract.AUTHORITY, ops);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Lỗi khi lưu vào danh bạ máy!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void addEvents() {
@@ -89,42 +207,54 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         else if (id == R.id.ctxCall) {
-            // 5. GỌI ĐIỆN THOẠI (Dùng ACTION_DIAL để an toàn, mở bàn phím số)
             Intent intent = new Intent(Intent.ACTION_DIAL);
             intent.setData(Uri.parse("tel:" + c.getPhone()));
             startActivity(intent);
             return true;
 
         } else if (id == R.id.ctxSms) {
-            // 6. NHẮN TIN SMS
             Intent intent = new Intent(Intent.ACTION_SENDTO);
             intent.setData(Uri.parse("smsto:" + c.getPhone()));
             startActivity(intent);
             return true;
 
         } else if (id == R.id.ctxShare) {
-            // 7. CHIA SẺ (Lên FB, Zalo, Copy text...)
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("text/plain");
-            // Nội dung sẽ được gửi đi:
             String noiDung = "Số điện thoại của " + c.getName() + " là: " + c.getPhone();
             intent.putExtra(Intent.EXTRA_TEXT, noiDung);
             startActivity(Intent.createChooser(intent, "Chia sẻ liên hệ qua..."));
             return true;
 
+
         } else if (id == R.id.ctxCamera) {
-            // 8. CHỤP ẢNH
             Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-            // Mình dùng mã 300 để phân biệt với 100 (Thêm) và 200 (Sửa) nhé
             startActivityForResult(intent, 300);
             return true;
+
+        } else if (id == R.id.ctxEmail) {
+            Intent intent = new Intent(Intent.ACTION_SENDTO);
+            String email = "test_email@gmail.com";
+            intent.setData(Uri.parse("mailto:" + email));
+            intent.putExtra(Intent.EXTRA_SUBJECT, "Thư gửi từ App Danh Bạ tới " + c.getName());
+            startActivity(intent);
+            return true;
+
+        } else if (id == R.id.ctxUrl) {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            String url = "https://www.google.com";
+            intent.setData(Uri.parse(url));
+            startActivity(intent);
+            return true;
+
         } else if (id == R.id.ctxDelete){
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("Xác nhận");
-            builder.setMessage("Bạn có chắc chắn xoá các mục đã chọn?");
+            builder.setMessage("Bạn có chắc chắn xoá liên hệ này?");
             builder.setPositiveButton("Xoá", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
+                    // db.deleteContact(c.getId()); // COMMENT LẠI DB
                     dsContact.remove(c);
                     adapter.notifyDataSetChanged();
                     Toast.makeText(MainActivity.this, "Đã xoá 1 liên hệ", Toast.LENGTH_SHORT).show();
@@ -135,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return super.onContextItemSelected(item);
     }
+
     private void displayDeleteDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Xác nhận");
@@ -149,13 +280,12 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-
-
     private void handleXoa() {
         List<Contact> dsDelete = new ArrayList<>();
         for (Contact c : dsContact) {
             if (c.isStatus()) {
                 dsDelete.add(c);
+                // db.deleteContact(c.getId()); // COMMENT LẠI DB
             }
         }
         if (dsDelete.isEmpty()) {
@@ -164,58 +294,72 @@ public class MainActivity extends AppCompatActivity {
         }
         dsContact.removeAll(dsDelete);
         adapter.notifyDataSetChanged();
-        ;
         Toast.makeText(this, "Đã xoá " + dsDelete.size() + " liên hệ", Toast.LENGTH_SHORT).show();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+//        if (requestCode == 100 && resultCode == RESULT_OK) {
+//            Bundle bundle = data.getExtras();
+//            if (bundle != null) {
+//                int id = bundle.getInt("id");
+//                String hoTen = bundle.getString("hoVaTen");
+//                String soDienThoai = bundle.getString("soDienThoai");
+//                String uriAnh = bundle.getString("uriAnh");
+//
+//                Contact newContact = new Contact(id, hoTen, soDienThoai, false, uriAnh);
+//
+//                // db.addContact(newContact); // COMMENT LẠI DB
+//                dsContact.add(newContact);
+//                adapter.notifyDataSetChanged();
+//                Toast.makeText(this, "Thêm thành công!", Toast.LENGTH_SHORT).show();
+//            }
+//        }
+
         if (requestCode == 100 && resultCode == RESULT_OK) {
             Bundle bundle = data.getExtras();
             if (bundle != null) {
-                int id = bundle.getInt("id");
                 String hoTen = bundle.getString("hoVaTen");
                 String soDienThoai = bundle.getString("soDienThoai");
-                String uriAnh = bundle.getString("uriAnh");
-                dsContact.add(new Contact(id, hoTen, soDienThoai, false, uriAnh));
-                adapter.notifyDataSetChanged();
+
+                // 1. Lưu thẳng vào danh bạ gốc của điện thoại
+                addContactToSystem(hoTen, soDienThoai);
+
+                // 2. Đọc lại danh bạ để cập nhật danh sách trên màn hình
+                loadContactsFromDevice();
+
+                Toast.makeText(this, "Thêm vào danh bạ thành công!", Toast.LENGTH_SHORT).show();
             }
         }
+
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             Bundle bundle = data.getExtras();
             if (bundle != null) {
-                int id = bundle.getInt("id");
-                String hoTen = bundle.getString("hoVaTen");
-                String soDienThoai = bundle.getString("soDienThoai");
-                String uriAnh = bundle.getString("uriAnh");
-                boolean statusMoi = bundle.getBoolean("status");
                 Contact c = dsContact.get(selectedItem);
-                c.setId(id);
-                c.setName(hoTen);
-                c.setPhone(soDienThoai);
-                c.setImagePath(uriAnh);
-                c.setStatus(statusMoi);
+                c.setId(bundle.getInt("id"));
+                c.setName(bundle.getString("hoVaTen"));
+                c.setPhone(bundle.getString("soDienThoai"));
+                c.setImagePath(bundle.getString("uriAnh"));
+                c.setStatus(bundle.getBoolean("status"));
 
+                // db.updateContact(c); // COMMENT LẠI DB
                 adapter.notifyDataSetChanged();
                 Toast.makeText(this, "Cập nhật thành công!", Toast.LENGTH_SHORT).show();
             }
         }
-        // XỬ LÝ KHI CHỤP ẢNH XONG (MÃ 300)
+
         if (requestCode == 300 && resultCode == RESULT_OK && data != null) {
-            // Lấy tấm ảnh thu nhỏ từ Camera
             android.graphics.Bitmap bitmap = (android.graphics.Bitmap) data.getExtras().get("data");
 
             if (bitmap != null) {
-                // Gọi hàm lưu ảnh ra file
                 Uri uriAnhMoi = saveBitmapToCache(bitmap);
 
                 if (uriAnhMoi != null) {
-                    // SỬ DỤNG BIẾN selectedItem CỦA BẠN ĐỂ CẬP NHẬT ĐÚNG NGƯỜI
                     Contact c = dsContact.get(selectedItem);
                     c.setImagePath(uriAnhMoi.toString());
 
-                    // Vẽ lại giao diện
+                    // db.updateContact(c); // COMMENT LẠI DB
                     adapter.notifyDataSetChanged();
                     Toast.makeText(this, "Chụp ảnh thành công!", Toast.LENGTH_SHORT).show();
                 }
@@ -237,23 +381,6 @@ public class MainActivity extends AppCompatActivity {
         inflater.inflate(R.menu.context_menu, menu);
     }
 
-    private void addControls() {
-        listView = findViewById(R.id.lvContact);
-        btnXoa = findViewById(R.id.btnXoa);
-        btnThemMoi = findViewById(R.id.btnThemMoi);
-        cbCheck = findViewById(R.id.cbCheck);
-        dsContact = new ArrayList<>();
-        dsContact.add(new Contact(1, "Nguyen Van A", "0987654321", false, null));
-        dsContact.add(new Contact(2, "Nguyen Van B", "0987654322", false, null));
-        dsContact.add(new Contact(3, "Nguyen Van C", "0987654323", false, null));
-        dsContact.add(new Contact(4, "Nguyen Van D", "0987654324", false, null));
-        dsContact.add(new Contact(5, "Nguyen Van E", "0987654325", false, null));
-        adapter = new ContactAdapter(this, dsContact);
-        listView.setAdapter(adapter);
-        registerForContextMenu(listView);
-    }
-
-    // Hàm này giúp chuyển đổi ảnh Bitmap từ Camera thành 1 file lưu trong máy
     private Uri saveBitmapToCache(android.graphics.Bitmap bitmap) {
         try {
             java.io.File file = new java.io.File(getCacheDir(), "avatar_camera_" + System.currentTimeMillis() + ".jpg");
@@ -267,5 +394,4 @@ public class MainActivity extends AppCompatActivity {
             return null;
         }
     }
-
 }
