@@ -167,6 +167,52 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    private void updateContactInSystem(int contactId, String newName, String newPhone) {
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+        String contactIdStr = String.valueOf(contactId);
+
+        // Lệnh 1: Cập nhật Tên
+        ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(ContactsContract.Data.CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                        new String[]{contactIdStr, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE})
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, newName)
+                .build());
+
+        // Lệnh 2: Cập nhật Số điện thoại
+        ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(ContactsContract.Data.CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                        new String[]{contactIdStr, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE})
+                .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, newPhone)
+                .build());
+
+        try {
+            // Gửi lệnh cho hệ thống thực thi
+            getContentResolver().applyBatch(ContactsContract.AUTHORITY, ops);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Lỗi khi cập nhật danh bạ máy!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void deleteContactFromSystem(int contactId) {
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+        String[] args = new String[] { String.valueOf(contactId) };
+
+        // Tạo lệnh xoá liên hệ dựa trên ID
+        ops.add(ContentProviderOperation.newDelete(ContactsContract.RawContacts.CONTENT_URI)
+                .withSelection(ContactsContract.RawContacts.CONTACT_ID + " = ?", args)
+                .build());
+
+        try {
+            // Thực thi lệnh xoá
+            getContentResolver().applyBatch(ContactsContract.AUTHORITY, ops);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Lỗi khi xoá khỏi danh bạ máy!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void addEvents() {
         btnThemMoi.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -247,6 +293,22 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
             return true;
 
+//        } else if (id == R.id.ctxDelete){
+//            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+//            builder.setTitle("Xác nhận");
+//            builder.setMessage("Bạn có chắc chắn xoá liên hệ này?");
+//            builder.setPositiveButton("Xoá", new DialogInterface.OnClickListener() {
+//                @Override
+//                public void onClick(DialogInterface dialog, int which) {
+//                    // db.deleteContact(c.getId()); // COMMENT LẠI DB
+//                    dsContact.remove(c);
+//                    adapter.notifyDataSetChanged();
+//                    Toast.makeText(MainActivity.this, "Đã xoá 1 liên hệ", Toast.LENGTH_SHORT).show();
+//                }
+//            });
+//            builder.setNegativeButton("Huỷ", null);
+//            builder.show();
+//        }
         } else if (id == R.id.ctxDelete){
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("Xác nhận");
@@ -254,9 +316,13 @@ public class MainActivity extends AppCompatActivity {
             builder.setPositiveButton("Xoá", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
-                    // db.deleteContact(c.getId()); // COMMENT LẠI DB
-                    dsContact.remove(c);
-                    adapter.notifyDataSetChanged();
+
+                    // 1. Xoá thẳng khỏi danh bạ gốc máy
+                    deleteContactFromSystem(c.getId());
+
+                    // 2. Load lại danh sách lên màn hình
+                    loadContactsFromDevice();
+
                     Toast.makeText(MainActivity.this, "Đã xoá 1 liên hệ", Toast.LENGTH_SHORT).show();
                 }
             });
@@ -333,18 +399,34 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+//        if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
+//            Bundle bundle = data.getExtras();
+//            if (bundle != null) {
+//                Contact c = dsContact.get(selectedItem);
+//                c.setId(bundle.getInt("id"));
+//                c.setName(bundle.getString("hoVaTen"));
+//                c.setPhone(bundle.getString("soDienThoai"));
+//                c.setImagePath(bundle.getString("uriAnh"));
+//                c.setStatus(bundle.getBoolean("status"));
+//
+//                // db.updateContact(c); // COMMENT LẠI DB
+//                adapter.notifyDataSetChanged();
+//                Toast.makeText(this, "Cập nhật thành công!", Toast.LENGTH_SHORT).show();
+//            }
+//        }
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             Bundle bundle = data.getExtras();
             if (bundle != null) {
                 Contact c = dsContact.get(selectedItem);
-                c.setId(bundle.getInt("id"));
-                c.setName(bundle.getString("hoVaTen"));
-                c.setPhone(bundle.getString("soDienThoai"));
-                c.setImagePath(bundle.getString("uriAnh"));
-                c.setStatus(bundle.getBoolean("status"));
+                String tenMoi = bundle.getString("hoVaTen");
+                String soMoi = bundle.getString("soDienThoai");
 
-                // db.updateContact(c); // COMMENT LẠI DB
-                adapter.notifyDataSetChanged();
+                // 1. Cập nhật thẳng vào danh bạ gốc của điện thoại
+                updateContactInSystem(c.getId(), tenMoi, soMoi);
+
+                // 2. Load lại danh sách lên màn hình
+                loadContactsFromDevice();
+
                 Toast.makeText(this, "Cập nhật thành công!", Toast.LENGTH_SHORT).show();
             }
         }
